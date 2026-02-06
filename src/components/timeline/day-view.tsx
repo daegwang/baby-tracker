@@ -69,7 +69,7 @@ export function DayView({ selectedDate, onDateChange, events, onEventDeleted }: 
     events.forEach((event) => {
       const eventDate = new Date(event.started_at);
       const hour = getHours(eventDate);
-      const time = format(eventDate, 'h:mm a');
+      const time = format(eventDate, 'ha');
       
       const addToCell = (colType: ColumnType, label: string, ml: number = 0, isBreast: boolean = false) => {
         const key = `${hour}-${colType}`;
@@ -96,16 +96,21 @@ export function DayView({ selectedDate, onDateChange, events, onEventDeleted }: 
             const totalSecs = Math.round((end - start) / 1000);
             const mins = Math.floor(totalSecs / 60);
             const secs = totalSecs % 60;
-            if (mins > 0 && secs > 0) {
-              duration = `${mins}m${secs}s`;
-            } else if (mins > 0) {
+            
+            // Rule: Show seconds only if duration < 1 minute
+            if (mins >= 1) {
               duration = `${mins}m`;
             } else if (secs > 0) {
               duration = `${secs}s`;
             }
           }
-          const mlPart = ml > 0 ? `(${ml}ml)` : '';
-          label = duration ? `🤱${duration}${mlPart}` : (ml > 0 ? `🤱${ml}ml` : '🤱');
+          const side = event.metadata.side === 'left' ? 'L' : event.metadata.side === 'right' ? 'R' : 'B';
+          
+          // Format: Line 1: emoji+side, Line 2: duration, Line 3: ml (if any)
+          let lines = [`🤱${side}`];
+          if (duration) lines.push(duration);
+          if (ml > 0) lines.push(`${ml}ml`);
+          label = lines.join('\n');
         } else {
           label = `🍼${ml}ml`;
         }
@@ -114,16 +119,33 @@ export function DayView({ selectedDate, onDateChange, events, onEventDeleted }: 
         addToCell('pumping', `${event.metadata.amount_ml || 0}ml`, event.metadata.amount_ml || 0);
       } else if (event.event_type === 'sleep') {
         const icon = event.metadata.type === 'night' ? '🌙' : '😴';
-        let duration = '';
+        let label = icon;
+        
         if (event.ended_at) {
-          const start = new Date(event.started_at).getTime();
-          const end = new Date(event.ended_at).getTime();
-          const mins = Math.round((end - start) / 60000);
+          const start = new Date(event.started_at);
+          const end = new Date(event.ended_at);
+          const startTime = start.getTime();
+          const endTime = end.getTime();
+          const mins = Math.round((endTime - startTime) / 60000);
           const h = Math.floor(mins / 60);
           const m = mins % 60;
-          duration = h > 0 ? (m > 0 ? `${h}h${m}m` : `${h}h`) : `${m}m`;
+          const duration = h > 0 ? (m > 0 ? `${h}h${m}m` : `${h}h`) : `${m}m`;
+          
+          // Check if sleep spans multiple days
+          const startDate = format(start, 'M/d');
+          const endDate = format(end, 'M/d');
+          const startTimeStr = format(start, 'h:mm a');
+          const endTimeStr = format(end, 'h:mm a');
+          
+          if (startDate !== endDate) {
+            // Multi-day sleep: show dates with times
+            label = `${icon}${duration} (${startDate} ${startTimeStr} - ${endDate} ${endTimeStr})`;
+          } else {
+            // Same day sleep: just show duration
+            label = `${icon}${duration}`;
+          }
         }
-        const label = duration ? `${icon}${duration}` : icon;
+        
         addToCell('sleep', label);
       }
     });
@@ -178,17 +200,17 @@ export function DayView({ selectedDate, onDateChange, events, onEventDeleted }: 
 
   const getHeaderSummary = (type: ColumnType) => {
     switch (type) {
-      case 'sleep': return stats.sleepCount > 0 ? (stats.sleepMinutes > 0 ? `${stats.sleepCount}(${formatDuration(stats.sleepMinutes)})` : `${stats.sleepCount}`) : '';
+      case 'sleep': return stats.sleepCount > 0 ? (stats.sleepMinutes > 0 ? `${stats.sleepCount}\n${formatDuration(stats.sleepMinutes)}` : `${stats.sleepCount}`) : '';
       case 'feed': {
         if (stats.feedCount === 0) return '';
         const parts: string[] = [];
         if (stats.feedMl > 0) parts.push(`${stats.feedMl}ml`);
         if (stats.feedMinutes > 0) parts.push(formatDuration(stats.feedMinutes));
-        return parts.length > 0 ? `${stats.feedCount}(${parts.join('+')})` : `${stats.feedCount}`;
+        return parts.length > 0 ? `${stats.feedCount}\n${parts.join(' ')}` : `${stats.feedCount}`;
       }
       case 'pee': return stats.peeCount > 0 ? `${stats.peeCount}` : '';
       case 'poop': return stats.poopCount > 0 ? `${stats.poopCount}` : '';
-      case 'pumping': return stats.pumpCount > 0 ? (stats.pumpMl > 0 ? `${stats.pumpCount}(${stats.pumpMl}ml)` : `${stats.pumpCount}`) : '';
+      case 'pumping': return stats.pumpCount > 0 ? (stats.pumpMl > 0 ? `${stats.pumpCount}\n${stats.pumpMl}ml` : `${stats.pumpCount}`) : '';
       default: return '';
     }
   };
@@ -243,18 +265,18 @@ export function DayView({ selectedDate, onDateChange, events, onEventDeleted }: 
       {/* Grid */}
       <div className="border border-border rounded-lg overflow-hidden bg-card">
         {/* Header with Summary */}
-        <div className="grid grid-cols-[72px_repeat(5,1fr)] border-b border-border">
+        <div className="grid grid-cols-[44px_repeat(5,1fr)] border-b border-border min-w-0">
           <div className="p-1.5 bg-muted" />
           {columns.map((col) => {
             const summary = getHeaderSummary(col.type);
             return (
               <div
                 key={col.type}
-                className={`p-2 text-center border-l border-border ${col.headerBg}`}
+                className={`p-2 text-center border-l border-border min-w-0 overflow-hidden ${col.headerBg}`}
               >
                 <div className="text-lg leading-none">{col.icon}</div>
                 {summary && (
-                  <div className="text-[10px] font-semibold mt-1 text-foreground/80">{summary}</div>
+                  <div className="text-[10px] font-semibold mt-1 text-foreground/80 whitespace-pre-line leading-tight">{summary}</div>
                 )}
               </div>
             );
@@ -264,10 +286,10 @@ export function DayView({ selectedDate, onDateChange, events, onEventDeleted }: 
         {/* Body - Hours */}
         <div>
           {hours.map((hour) => (
-            <div key={hour} className="grid grid-cols-[72px_repeat(5,1fr)] border-b border-border last:border-b-0">
+            <div key={hour} className="grid grid-cols-[44px_repeat(5,1fr)] border-b border-border last:border-b-0 min-w-0">
               {/* Hour label */}
-              <div className="p-1 text-[10px] text-muted-foreground text-right pr-1.5 border-r border-border bg-muted flex items-center justify-end">
-                {hour === 0 ? '12:00 AM' : hour < 12 ? `${hour}:00 AM` : hour === 12 ? '12:00 PM' : `${hour - 12}:00 PM`}
+              <div className="p-1 text-[10px] text-muted-foreground text-right pr-1 border-r border-border bg-muted flex items-center justify-end">
+                {hour === 0 ? '12AM' : hour < 12 ? `${hour}AM` : hour === 12 ? '12PM' : `${hour - 12}PM`}
               </div>
               
               {/* Activity columns */}
@@ -278,20 +300,21 @@ export function DayView({ selectedDate, onDateChange, events, onEventDeleted }: 
                 return (
                   <div
                     key={key}
-                    className="min-h-[40px] p-0.5 border-l border-border flex flex-col gap-0.5 items-center justify-center"
+                    className="min-h-[40px] p-0.5 border-l border-border flex flex-col gap-0.5 items-center justify-center overflow-hidden"
                   >
                     {cell?.events.map((ev) => (
                       <div
                         key={ev.id}
-                        className={`${col.color} text-[10px] px-1.5 py-0.5 rounded font-semibold flex items-center gap-1`}
+                        className={`${col.color} text-[10px] px-1.5 py-0.5 rounded font-semibold flex items-center gap-1 overflow-hidden min-w-0 max-w-full`}
+                        title={ev.label}
                       >
-                        <span>{ev.label}</span>
+                        <span className="overflow-hidden min-w-0 flex-shrink whitespace-pre-line leading-tight text-center">{ev.label}</span>
                         {editMode && (
                           <button
                             type="button"
                             onClick={() => handleDelete(ev.id)}
                             disabled={deletingId === ev.id}
-                            className="opacity-60 hover:opacity-100 active:opacity-100"
+                            className="opacity-60 hover:opacity-100 active:opacity-100 flex-shrink-0"
                           >
                             ×
                           </button>

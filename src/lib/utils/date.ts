@@ -36,14 +36,16 @@ export function formatDuration(startedAt: string, endedAt?: string | null, showS
   const mins = Math.floor((totalSeconds % 3600) / 60);
   const secs = totalSeconds % 60;
   
-  if (showSeconds) {
-    if (hours > 0) {
-      return `${hours}h ${mins}m ${secs}s`;
-    }
-    return `${mins}m ${secs}s`;
+  // Rule: Show seconds only if total duration < 1 minute
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const shouldShowSeconds = showSeconds && totalMinutes < 1;
+  
+  if (shouldShowSeconds) {
+    // Less than 1 minute: show seconds only
+    return `${secs}s`;
   }
   
-  // Default: no seconds for completed events
+  // 1 minute or more: show hours/minutes only, NO seconds
   if (hours > 0) {
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   }

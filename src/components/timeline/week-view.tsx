@@ -37,10 +37,12 @@ function getEventLabel(event: BabyEvent): string {
     const totalSecs = Math.round((end - start) / 1000);
     const mins = Math.floor(totalSecs / 60);
     const secs = totalSecs % 60;
-    if (mins > 0 && secs > 0) return `${mins}m${secs}s`;
-    if (mins > 0) return `${mins}m`;
-    if (secs > 0) return `${secs}s`;
-    return '';
+    
+    // Rule: Show seconds only if duration < 1 minute
+    if (mins >= 1) {
+      return `${mins}m`;
+    }
+    return secs > 0 ? `${secs}s` : '';
   };
 
   switch (event_type) {
@@ -48,8 +50,13 @@ function getEventLabel(event: BabyEvent): string {
       if (metadata.method === 'breast') {
         const duration = getDuration();
         const ml = metadata.amount_ml;
-        const mlPart = ml ? `(${ml}ml)` : '';
-        return duration ? `🤱${duration}${mlPart}` : (ml ? `🤱${ml}ml` : '🤱');
+        const side = metadata.side === 'left' ? 'L' : metadata.side === 'right' ? 'R' : 'B';
+        
+        // Format: Line 1: emoji+side, Line 2: duration, Line 3: ml (if any)
+        let lines = [`🤱${side}`];
+        if (duration) lines.push(duration);
+        if (ml) lines.push(`${ml}ml`);
+        return lines.join('\n');
       }
       return `🍼${metadata.amount_ml || 0}ml`;
     case 'diaper':
@@ -59,12 +66,27 @@ function getEventLabel(event: BabyEvent): string {
     case 'sleep': {
       const icon = metadata.type === 'night' ? '🌙' : '😴';
       if (!ended_at) return icon;
-      const start = new Date(started_at).getTime();
-      const end = new Date(ended_at).getTime();
-      const mins = Math.round((end - start) / 60000);
+      
+      const startDate = new Date(started_at);
+      const endDate = new Date(ended_at);
+      const startTime = startDate.getTime();
+      const endTime = endDate.getTime();
+      const mins = Math.round((endTime - startTime) / 60000);
       const h = Math.floor(mins / 60);
       const m = mins % 60;
       const duration = h > 0 ? (m > 0 ? `${h}h${m}m` : `${h}h`) : `${m}m`;
+      
+      // Check if sleep spans multiple days
+      const startDay = format(startDate, 'M/d');
+      const endDay = format(endDate, 'M/d');
+      const startTimeStr = format(startDate, 'h:mm a');
+      const endTimeStr = format(endDate, 'h:mm a');
+      
+      if (startDay !== endDay) {
+        // Multi-day sleep: show dates with times (compact for week view)
+        return `${icon}${duration} (${startDay} ${startTimeStr} - ${endDay} ${endTimeStr})`;
+      }
+      
       return `${icon}${duration}`;
     }
     default:
@@ -78,7 +100,7 @@ export function WeekView({ selectedDate, onDateChange, events }: WeekViewProps) 
   const weekEnd = endOfWeek(selectedDate);
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
   
-  const hours = Array.from({ length: 19 }, (_, i) => i + 5);
+  const hours = Array.from({ length: 24 }, (_, i) => i);
 
   const eventsByDayAndHour = useMemo(() => {
     const map: Record<string, { event: BabyEvent; time: string }[]> = {};
@@ -86,7 +108,7 @@ export function WeekView({ selectedDate, onDateChange, events }: WeekViewProps) 
       const eventDate = new Date(event.started_at);
       const dayKey = format(eventDate, 'yyyy-MM-dd');
       const hour = getHours(eventDate);
-      const time = format(eventDate, 'h:mm a');
+      const time = format(eventDate, 'ha');
       const key = `${dayKey}-${hour}`;
       if (!map[key]) map[key] = [];
       map[key].push({ event, time });
@@ -137,14 +159,14 @@ export function WeekView({ selectedDate, onDateChange, events }: WeekViewProps) 
       {/* Calendar Grid */}
       <div className="border border-border rounded-lg overflow-hidden bg-card">
         {/* Header - Days */}
-        <div className="grid grid-cols-[72px_repeat(7,1fr)] bg-muted border-b border-border">
+        <div className="grid grid-cols-[44px_repeat(7,1fr)] bg-muted border-b border-border min-w-0">
           <div className="p-1" />
           {weekDays.map((day) => {
             const isDayToday = isToday(day);
             return (
               <div
                 key={day.toISOString()}
-                className={`p-1.5 text-center border-l border-border ${isDayToday ? 'bg-primary/20 dark:bg-primary/30' : ''}`}
+                className={`p-1.5 text-center border-l border-border min-w-0 overflow-hidden ${isDayToday ? 'bg-primary/20 dark:bg-primary/30' : ''}`}
               >
                 <div className="text-[10px] text-muted-foreground uppercase">
                   {format(day, 'EEE')}
@@ -160,10 +182,10 @@ export function WeekView({ selectedDate, onDateChange, events }: WeekViewProps) 
         {/* Body - Hours */}
         <div>
           {hours.map((hour) => (
-            <div key={hour} className="grid grid-cols-[72px_repeat(7,1fr)] border-b border-border last:border-b-0">
+            <div key={hour} className="grid grid-cols-[44px_repeat(7,1fr)] border-b border-border last:border-b-0 min-w-0">
               {/* Hour label */}
-              <div className="p-1 text-[10px] text-muted-foreground text-right pr-2 border-r border-border bg-muted flex items-center justify-end">
-                {hour === 0 ? '12:00 AM' : hour < 12 ? `${hour}:00 AM` : hour === 12 ? '12:00 PM' : `${hour - 12}:00 PM`}
+              <div className="p-1 text-[10px] text-muted-foreground text-right pr-1 border-r border-border bg-muted flex items-center justify-end">
+                {hour === 0 ? '12AM' : hour < 12 ? `${hour}AM` : hour === 12 ? '12PM' : `${hour - 12}PM`}
               </div>
               
               {/* Day cells */}
@@ -175,13 +197,14 @@ export function WeekView({ selectedDate, onDateChange, events }: WeekViewProps) 
                 return (
                   <div
                     key={key}
-                    className={`min-h-[36px] p-0.5 border-l border-border ${isDayToday ? 'bg-primary/5 dark:bg-primary/10' : ''}`}
+                    className={`min-h-[36px] p-0.5 border-l border-border ${isDayToday ? 'bg-primary/5 dark:bg-primary/10' : ''} overflow-hidden`}
                   >
-                    <div className="flex flex-col gap-0.5">
+                    <div className="flex flex-col gap-0.5 min-w-0">
                       {cellEvents.map(({ event }, idx) => (
                         <div
                           key={`${event.id}-${idx}`}
-                          className={`${eventColors[event.event_type]} text-[9px] px-1 py-0.5 rounded font-semibold`}
+                          className={`${eventColors[event.event_type]} text-[10px] px-1 py-0.5 rounded font-semibold overflow-hidden min-w-0 whitespace-pre-line leading-tight text-center`}
+                          title={getEventLabel(event)}
                         >
                           {getEventLabel(event)}
                         </div>

@@ -37,7 +37,7 @@ export function TodaySummary({ babyId, date, onDateChange, lastEvents, refreshKe
   };
 
   const stats = useMemo(() => {
-    let sleepCount = 0, feedCount = 0, feedMl = 0, peeCount = 0, poopCount = 0, pumpCount = 0, pumpMl = 0;
+    let sleepCount = 0, feedCount = 0, feedMl = 0, breastMinutes = 0, peeCount = 0, poopCount = 0, pumpCount = 0, pumpMl = 0;
 
     events.forEach((event) => {
       switch (event.event_type) {
@@ -45,6 +45,13 @@ export function TodaySummary({ babyId, date, onDateChange, lastEvents, refreshKe
         case 'feed':
           feedCount++;
           if (event.metadata.amount_ml) feedMl += event.metadata.amount_ml;
+          // Calculate breast feed duration
+          if (event.metadata.method === 'breast' && event.started_at && event.ended_at) {
+            const start = new Date(event.started_at).getTime();
+            const end = new Date(event.ended_at).getTime();
+            const minutes = Math.round((end - start) / 60000);
+            if (minutes > 0) breastMinutes += minutes;
+          }
           break;
         case 'diaper':
           if (event.metadata.wet) peeCount++;
@@ -57,7 +64,7 @@ export function TodaySummary({ babyId, date, onDateChange, lastEvents, refreshKe
       }
     });
 
-    return { sleepCount, feedCount, feedMl, peeCount, poopCount, pumpCount, pumpMl };
+    return { sleepCount, feedCount, feedMl, breastMinutes, peeCount, poopCount, pumpCount, pumpMl };
   }, [events]);
 
   const getTimeAgo = (event: BabyEvent | undefined) => {
@@ -93,11 +100,18 @@ export function TodaySummary({ babyId, date, onDateChange, lastEvents, refreshKe
     ? format(date, 'M월 d일 EEEE', { locale: ko })
     : format(date, 'EEEE, MMM d');
 
+  const formatBreastTime = (minutes: number) => {
+    if (minutes < 60) return `${minutes}m`;
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  };
+
   const columns = [
-    { type: 'sleep' as EventType, icon: '🛏️', count: stats.sleepCount, ml: null, bg: 'bg-blue-100 dark:bg-blue-900/50', text: 'text-blue-800 dark:text-blue-200', subtext: 'text-blue-600 dark:text-blue-300' },
-    { type: 'feed' as EventType, icon: '🍼', count: stats.feedCount, ml: stats.feedMl, bg: 'bg-green-100 dark:bg-green-900/50', text: 'text-green-800 dark:text-green-200', subtext: 'text-green-600 dark:text-green-300' },
-    { type: 'diaper' as EventType, icon: '💧', count: stats.peeCount + stats.poopCount, ml: null, bg: 'bg-amber-100 dark:bg-amber-900/50', text: 'text-amber-800 dark:text-amber-200', subtext: 'text-amber-600 dark:text-amber-300', extra: `💦${stats.peeCount} 💩${stats.poopCount}` },
-    { type: 'pumping' as EventType, icon: '🧴', count: stats.pumpCount, ml: stats.pumpMl, bg: 'bg-purple-100 dark:bg-purple-900/50', text: 'text-purple-800 dark:text-purple-200', subtext: 'text-purple-600 dark:text-purple-300' },
+    { type: 'sleep' as EventType, icon: '🛏️', count: stats.sleepCount, ml: null, breastTime: null, bg: 'bg-blue-100 dark:bg-blue-900/50', text: 'text-blue-800 dark:text-blue-200', subtext: 'text-blue-600 dark:text-blue-300' },
+    { type: 'feed' as EventType, icon: '🍼', count: stats.feedCount, ml: stats.feedMl, breastTime: stats.breastMinutes, bg: 'bg-green-100 dark:bg-green-900/50', text: 'text-green-800 dark:text-green-200', subtext: 'text-green-600 dark:text-green-300' },
+    { type: 'diaper' as EventType, icon: '💧', count: stats.peeCount + stats.poopCount, ml: null, breastTime: null, bg: 'bg-amber-100 dark:bg-amber-900/50', text: 'text-amber-800 dark:text-amber-200', subtext: 'text-amber-600 dark:text-amber-300', extra: `💦${stats.peeCount} 💩${stats.poopCount}` },
+    { type: 'pumping' as EventType, icon: '🧴', count: stats.pumpCount, ml: stats.pumpMl, breastTime: null, bg: 'bg-purple-100 dark:bg-purple-900/50', text: 'text-purple-800 dark:text-purple-200', subtext: 'text-purple-600 dark:text-purple-300' },
   ];
 
   if (loading) {
@@ -144,8 +158,12 @@ export function TodaySummary({ babyId, date, onDateChange, lastEvents, refreshKe
                 <span className={`text-2xl font-bold ${col.text}`}>{col.count}</span>
               </div>
               
-              {col.ml !== null && col.ml > 0 && (
-                <div className={`text-xs font-medium ${col.subtext}`}>{col.ml}ml total</div>
+              {((col.ml !== null && col.ml > 0) || (col.breastTime !== null && col.breastTime > 0)) && (
+                <div className={`text-xs font-medium ${col.subtext}`}>
+                  {col.ml !== null && col.ml > 0 && <>{col.ml}ml</>}
+                  {col.ml !== null && col.ml > 0 && col.breastTime !== null && col.breastTime > 0 && <> </>}
+                  {col.breastTime !== null && col.breastTime > 0 && <>🤱{formatBreastTime(col.breastTime)}</>}
+                </div>
               )}
               
               {col.extra && (
