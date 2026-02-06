@@ -13,6 +13,18 @@ import { createEvent } from '@/lib/api/events';
 import { useI18n } from '@/lib/i18n';
 import type { FeedMetadata } from '@/lib/types';
 
+const TIMER_STORAGE_KEY = 'baby-tracker-active-timer';
+
+interface PersistedTimer {
+  type: 'breast';
+  babyId: string;
+  startTime: string; // ISO string
+  elapsedMs: number;
+  lastResumeTime: string | null; // ISO string
+  isRunning: boolean;
+  side: 'left' | 'right' | 'both';
+}
+
 interface FeedSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -73,6 +85,8 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
   const [entryMode, setEntryMode] = useState<'timer' | 'manual'>('timer');
   const [isRunning, setIsRunning] = useState(false);
   const [startTime, setStartTime] = useState<Date>();
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [lastResumeTime, setLastResumeTime] = useState<Date | null>(null);
   const [manualStartTime, setManualStartTime] = useState('');
   const [manualEndTime, setManualEndTime] = useState('');
   const [amount, setAmount] = useState(90);
@@ -89,10 +103,105 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
     }
   }, [open]);
 
-  const handleStart = () => { setStartTime(new Date()); setIsRunning(true); };
-  const handleResume = () => { setIsRunning(true); };
-  const handleStop = () => { setIsRunning(false); };
-  const handleReset = () => { setStartTime(undefined); setIsRunning(false); };
+  // Persist timer state to localStorage
+  const persistTimer = () => {
+    console.log('[FeedSheet] persistTimer called - method:', method, 'startTime:', startTime, 'babyId:', babyId);
+    if (method === 'breast' && startTime) {
+      const timerData: PersistedTimer = {
+        type: 'breast',
+        babyId,
+        startTime: startTime.toISOString(),
+        elapsedMs,
+        lastResumeTime: lastResumeTime?.toISOString() || null,
+        isRunning,
+        side,
+      };
+      console.log('[FeedSheet] Saving timer to localStorage:', timerData);
+      localStorage.setItem(TIMER_STORAGE_KEY, JSON.stringify(timerData));
+    } else {
+      console.log('[FeedSheet] Not saving - conditions not met');
+    }
+  };
+
+  // Clear persisted timer
+  const clearPersistedTimer = () => {
+    localStorage.removeItem(TIMER_STORAGE_KEY);
+  };
+
+  // Check for persisted timer on sheet open
+  useEffect(() => {
+    if (open) {
+      const saved = localStorage.getItem(TIMER_STORAGE_KEY);
+      if (saved) {
+        try {
+          const timer: any = JSON.parse(saved);
+          // Support both old 'method' and new 'type' field
+          const timerType = timer.type || (timer.method === 'breast' ? 'breast' : null);
+          if (timer.babyId === babyId && timerType === 'breast') {
+            // Restore state directly without confirmation
+            setMethod('breast');
+            setSide(timer.side);
+            setStartTime(new Date(timer.startTime));
+            
+            // Calculate elapsed time correctly to avoid double-counting
+            if (timer.isRunning && timer.lastResumeTime) {
+              // If timer was running, calculate total elapsed up to now
+              const elapsedSinceResume = Date.now() - new Date(timer.lastResumeTime).getTime();
+              setElapsedMs(timer.elapsedMs + elapsedSinceResume);
+              setLastResumeTime(new Date()); // Set to now for continued tracking
+            } else {
+              // If timer was paused, keep the saved elapsed time
+              setElapsedMs(timer.elapsedMs);
+              setLastResumeTime(timer.lastResumeTime ? new Date(timer.lastResumeTime) : null);
+            }
+            
+            setIsRunning(timer.isRunning);
+            setEntryMode('timer');
+          }
+        } catch (error) {
+          console.error('Failed to restore timer:', error);
+          clearPersistedTimer();
+        }
+      }
+    }
+  }, [open, babyId]);
+
+  // Auto-persist timer state when it changes
+  useEffect(() => {
+    console.log('[FeedSheet] Auto-persist useEffect triggered');
+    if (method === 'breast' && startTime && entryMode === 'timer') {
+      persistTimer();
+    }
+  }, [method, startTime, elapsedMs, lastResumeTime, isRunning, side, entryMode, babyId]);
+
+  const handleStart = () => {
+    const now = new Date();
+    setStartTime(now);
+    setLastResumeTime(now);
+    setElapsedMs(0);
+    setIsRunning(true);
+  };
+  
+  const handleResume = () => {
+    const now = new Date();
+    setLastResumeTime(now);
+    setIsRunning(true);
+  };
+  
+  const handleStop = () => {
+    if (lastResumeTime) {
+      setElapsedMs(prev => prev + (Date.now() - lastResumeTime.getTime()));
+    }
+    setIsRunning(false);
+  };
+  
+  const handleReset = () => {
+    setStartTime(undefined);
+    setLastResumeTime(null);
+    setElapsedMs(0);
+    setIsRunning(false);
+    clearPersistedTimer();
+  };
 
   const handleSave = async () => {
     setLoading(true);
@@ -125,8 +234,19 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
           started_at = startDate.toISOString();
           ended_at = endDate.toISOString();
         } else {
-          started_at = startTime ? startTime.toISOString() : new Date().toISOString();
-          ended_at = new Date().toISOString(); // Always set end time
+          // Timer mode: calculate ended_at from startTime + elapsedMs
+          if (startTime) {
+            started_at = startTime.toISOString();
+            // Calculate total elapsed (include current running segment if still running)
+            let totalMs = elapsedMs;
+            if (isRunning && lastResumeTime) {
+              totalMs += Date.now() - lastResumeTime.getTime();
+            }
+            ended_at = new Date(startTime.getTime() + totalMs).toISOString();
+          } else {
+            started_at = new Date().toISOString();
+            ended_at = new Date().toISOString();
+          }
         }
       } else {
         metadata.amount_ml = amount;
@@ -143,8 +263,13 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
         metadata,
       });
 
+      // Clear persisted timer on successful save
+      clearPersistedTimer();
+      
       setIsRunning(false);
       setStartTime(undefined);
+      setElapsedMs(0);
+      setLastResumeTime(null);
       setAmount(90);
       setBreastAmount('');
       setFeedType('breast_milk');
@@ -252,6 +377,8 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
                 <EventTimer
                   isRunning={isRunning}
                   startTime={startTime}
+                  elapsedMs={elapsedMs}
+                  lastResumeTime={lastResumeTime}
                   onStart={handleStart}
                   onStop={handleStop}
                   onResume={handleResume}
