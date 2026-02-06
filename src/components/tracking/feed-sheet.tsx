@@ -126,7 +126,7 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
           ended_at = endDate.toISOString();
         } else {
           started_at = startTime ? startTime.toISOString() : new Date().toISOString();
-          ended_at = startTime && !isRunning ? new Date().toISOString() : null;
+          ended_at = new Date().toISOString(); // Always set end time
         }
       } else {
         metadata.amount_ml = amount;
