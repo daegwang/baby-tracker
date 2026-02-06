@@ -8,6 +8,7 @@ import { addDays, isToday } from 'date-fns';
 import { BabyHeader } from '@/components/baby/baby-header';
 import { TodaySummary } from '@/components/tracking/today-summary';
 import { QuickActions } from '@/components/tracking/quick-actions';
+import { ActiveTimerBanner } from '@/components/tracking/active-timer-banner';
 import { SleepSheet } from '@/components/tracking/sleep-sheet';
 import { FeedSheet } from '@/components/tracking/feed-sheet';
 import { DiaperSheet } from '@/components/tracking/diaper-sheet';
@@ -153,6 +154,18 @@ export default function DashboardPage() {
           onOpenChange={setPumpSheetOpen}
           babyId={baby.id}
           onSaved={handleEventSaved}
+        />
+
+        {/* Floating Timer Banner */}
+        <ActiveTimerBanner 
+          babyId={baby.id} 
+          onTap={(type) => {
+            if (type === 'breast') {
+              setFeedSheetOpen(true);
+            } else if (type === 'pump') {
+              setPumpSheetOpen(true);
+            }
+          }} 
         />
       </div>
     </div>
