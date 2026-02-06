@@ -31,11 +31,12 @@ function TimerBadge({
 }) {
   const sideLabel = timer.side === 'left' ? 'L' : timer.side === 'right' ? 'R' : 'B';
   const emoji = timer.type === 'pump' ? '🧴' : '🤱';
+  const bgColor = timer.type === 'pump' ? 'bg-purple-500' : 'bg-green-500';
 
   return (
     <button
       onClick={onTap}
-      className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-full shadow-lg animate-pulse"
+      className={`flex items-center gap-2 px-4 py-2 ${bgColor} text-white rounded-full shadow-lg animate-pulse`}
     >
       <span className="text-lg">{emoji}</span>
       <span className="font-bold">{displayTime}</span>
@@ -55,47 +56,32 @@ export function ActiveTimerBanner({ babyId, onTap }: ActiveTimerBannerProps) {
       
       // Check breast timer
       const breastSaved = localStorage.getItem(BREAST_TIMER_STORAGE_KEY);
-      console.log('[ActiveTimerBanner] Breast timer from localStorage:', breastSaved);
       if (breastSaved) {
         try {
           const parsed: any = JSON.parse(breastSaved);
-          console.log('[ActiveTimerBanner] Parsed breast timer:', parsed);
-          console.log('[ActiveTimerBanner] Current babyId:', babyId, 'Saved babyId:', parsed.babyId);
           if (parsed.babyId === babyId) {
             activeTimers.push({ ...parsed, type: 'breast' });
-          } else {
-            console.log('[ActiveTimerBanner] Breast timer babyId mismatch - not showing');
           }
-        } catch (e) {
-          console.error('[ActiveTimerBanner] Failed to parse breast timer:', e);
+        } catch {
+          // Ignore invalid data
         }
-      } else {
-        console.log('[ActiveTimerBanner] No breast timer in localStorage');
       }
       
       // Check pump timer
       const pumpSaved = localStorage.getItem(PUMP_TIMER_STORAGE_KEY);
-      console.log('[ActiveTimerBanner] Pump timer from localStorage:', pumpSaved);
       if (pumpSaved) {
         try {
           const parsed: any = JSON.parse(pumpSaved);
-          console.log('[ActiveTimerBanner] Parsed pump timer:', parsed);
-          console.log('[ActiveTimerBanner] Current babyId:', babyId, 'Saved babyId:', parsed.babyId);
           // Since we're reading from PUMP_TIMER_STORAGE_KEY, we can assume it's a pump timer
           // Handle both explicit type: 'pump' and missing type (backward compatibility)
           if (parsed.babyId === babyId) {
             activeTimers.push({ ...parsed, type: 'pump' });
-          } else {
-            console.log('[ActiveTimerBanner] Pump timer babyId mismatch - not showing');
           }
-        } catch (e) {
-          console.error('[ActiveTimerBanner] Failed to parse pump timer:', e);
+        } catch {
+          // Ignore invalid data
         }
-      } else {
-        console.log('[ActiveTimerBanner] No pump timer in localStorage');
       }
       
-      console.log('[ActiveTimerBanner] Active timers to display:', activeTimers);
       setTimers(activeTimers);
     };
 

@@ -105,7 +105,6 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
 
   // Persist timer state to localStorage
   const persistTimer = () => {
-    console.log('[FeedSheet] persistTimer called - method:', method, 'startTime:', startTime, 'babyId:', babyId);
     if (method === 'breast' && startTime) {
       const timerData: PersistedTimer = {
         type: 'breast',
@@ -116,10 +115,7 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
         isRunning,
         side,
       };
-      console.log('[FeedSheet] Saving timer to localStorage:', timerData);
       localStorage.setItem(TIMER_STORAGE_KEY, JSON.stringify(timerData));
-    } else {
-      console.log('[FeedSheet] Not saving - conditions not met');
     }
   };
 
@@ -168,7 +164,6 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
 
   // Auto-persist timer state when it changes
   useEffect(() => {
-    console.log('[FeedSheet] Auto-persist useEffect triggered');
     if (method === 'breast' && startTime && entryMode === 'timer') {
       persistTimer();
     }

@@ -89,7 +89,6 @@ export function PumpSheet({ open, onOpenChange, babyId, onSaved }: PumpSheetProp
 
   // Persist timer state to localStorage
   const persistTimer = () => {
-    console.log('[PumpSheet] persistTimer called - startTime:', startTime, 'babyId:', babyId);
     if (startTime) {
       const timerData: PersistedTimer = {
         type: 'pump',
@@ -100,10 +99,7 @@ export function PumpSheet({ open, onOpenChange, babyId, onSaved }: PumpSheetProp
         isRunning,
         side,
       };
-      console.log('[PumpSheet] Saving timer to localStorage:', timerData);
       localStorage.setItem(PUMP_TIMER_STORAGE_KEY, JSON.stringify(timerData));
-    } else {
-      console.log('[PumpSheet] Not saving - startTime not set');
     }
   };
 
@@ -118,19 +114,25 @@ export function PumpSheet({ open, onOpenChange, babyId, onSaved }: PumpSheetProp
       const saved = localStorage.getItem(PUMP_TIMER_STORAGE_KEY);
       if (saved) {
         try {
-          const timer: PersistedTimer = JSON.parse(saved);
-          if (timer.babyId === babyId && timer.type === 'pump') {
-            // Calculate elapsed time since last resume if was running
-            let currentElapsed = timer.elapsedMs;
-            if (timer.isRunning && timer.lastResumeTime) {
-              currentElapsed += Date.now() - new Date(timer.lastResumeTime).getTime();
-            }
-            
+          const timer: any = JSON.parse(saved);
+          // Handle both explicit type: 'pump' and missing type (backward compatibility)
+          if (timer.babyId === babyId) {
             // Restore state directly without confirmation
             setSide(timer.side);
             setStartTime(new Date(timer.startTime));
-            setElapsedMs(currentElapsed);
-            setLastResumeTime(new Date());
+            
+            // Calculate elapsed time correctly to avoid double-counting
+            if (timer.isRunning && timer.lastResumeTime) {
+              // If timer was running, calculate total elapsed up to now
+              const elapsedSinceResume = Date.now() - new Date(timer.lastResumeTime).getTime();
+              setElapsedMs(timer.elapsedMs + elapsedSinceResume);
+              setLastResumeTime(new Date()); // Set to now for continued tracking
+            } else {
+              // If timer was paused, keep the saved elapsed time
+              setElapsedMs(timer.elapsedMs);
+              setLastResumeTime(timer.lastResumeTime ? new Date(timer.lastResumeTime) : null);
+            }
+            
             setIsRunning(timer.isRunning);
           }
         } catch (error) {
@@ -143,7 +145,6 @@ export function PumpSheet({ open, onOpenChange, babyId, onSaved }: PumpSheetProp
 
   // Auto-persist timer state when it changes
   useEffect(() => {
-    console.log('[PumpSheet] Auto-persist useEffect triggered');
     if (startTime) {
       persistTimer();
     }
