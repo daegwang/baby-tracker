@@ -8,12 +8,14 @@ import { Button } from '@/components/ui/button';
 import { BabyHeader } from '@/components/baby/baby-header';
 import { WeekView } from '@/components/timeline/week-view';
 import { DayView } from '@/components/timeline/day-view';
+import { LogView } from '@/components/timeline/log-view';
 import { getBabies } from '@/lib/api/babies';
 import { getEvents, getEventsForMonth } from '@/lib/api/events';
 import { useI18n } from '@/lib/i18n';
 import type { Baby, BabyEvent } from '@/lib/types';
 
 type ViewMode = 'daily' | 'weekly';
+type DailyViewMode = 'table' | 'log';
 
 export default function TimelinePage() {
   const router = useRouter();
@@ -22,6 +24,7 @@ export default function TimelinePage() {
   const [events, setEvents] = useState<BabyEvent[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('weekly');
+  const [dailyViewMode, setDailyViewMode] = useState<DailyViewMode>('table');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -124,9 +127,38 @@ export default function TimelinePage() {
           ))}
         </div>
 
-        {/* View Content */}
+        {/* Daily View Mode Toggle */}
         {viewMode === 'daily' && (
+          <div className="grid grid-cols-2 gap-1 p-1 bg-muted rounded-lg mb-4">
+            {(['table', 'log'] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setDailyViewMode(mode)}
+                className={`py-2 px-4 rounded-md text-sm font-medium ${
+                  dailyViewMode === mode
+                    ? 'bg-background shadow-sm text-foreground'
+                    : 'text-muted-foreground'
+                }`}
+              >
+                {mode === 'table' ? 'Table View' : 'Log View'}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* View Content */}
+        {viewMode === 'daily' && dailyViewMode === 'table' && (
           <DayView
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+            events={dayEvents}
+            onEventDeleted={loadEvents}
+          />
+        )}
+
+        {viewMode === 'daily' && dailyViewMode === 'log' && (
+          <LogView
             selectedDate={selectedDate}
             onDateChange={setSelectedDate}
             events={dayEvents}

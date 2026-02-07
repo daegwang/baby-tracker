@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   startOfWeek,
   endOfWeek,
@@ -95,6 +95,7 @@ function getEventLabel(event: BabyEvent): string {
 }
 
 export function WeekView({ selectedDate, onDateChange, events }: WeekViewProps) {
+  const [showingTimeId, setShowingTimeId] = useState<string | null>(null);
   const { t } = useI18n();
   const weekStart = startOfWeek(selectedDate);
   const weekEnd = endOfWeek(selectedDate);
@@ -103,15 +104,17 @@ export function WeekView({ selectedDate, onDateChange, events }: WeekViewProps) 
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   const eventsByDayAndHour = useMemo(() => {
-    const map: Record<string, { event: BabyEvent; time: string }[]> = {};
+    const map: Record<string, { event: BabyEvent; time: string; actualTime: string; label: string }[]> = {};
     events.forEach((event) => {
       const eventDate = new Date(event.started_at);
       const dayKey = format(eventDate, 'yyyy-MM-dd');
       const hour = getHours(eventDate);
       const time = format(eventDate, 'ha');
+      const actualTime = format(eventDate, 'h:mm a');
+      const label = getEventLabel(event);
       const key = `${dayKey}-${hour}`;
       if (!map[key]) map[key] = [];
-      map[key].push({ event, time });
+      map[key].push({ event, time, actualTime, label });
     });
     return map;
   }, [events]);
@@ -200,13 +203,14 @@ export function WeekView({ selectedDate, onDateChange, events }: WeekViewProps) 
                     className={`min-h-[36px] p-0.5 border-l border-border ${isDayToday ? 'bg-primary/5 dark:bg-primary/10' : ''} overflow-hidden`}
                   >
                     <div className="flex flex-col gap-0.5 min-w-0">
-                      {cellEvents.map(({ event }, idx) => (
+                      {cellEvents.map(({ event, actualTime, label }, idx) => (
                         <div
                           key={`${event.id}-${idx}`}
-                          className={`${eventColors[event.event_type]} text-[10px] px-1 py-0.5 rounded font-semibold overflow-hidden min-w-0 whitespace-pre-line leading-tight text-center`}
-                          title={getEventLabel(event)}
+                          className={`${eventColors[event.event_type]} text-[10px] px-1 py-0.5 rounded font-semibold overflow-hidden min-w-0 whitespace-pre-line leading-tight text-center cursor-pointer hover:opacity-90`}
+                          title={showingTimeId === event.id ? actualTime : label}
+                          onClick={() => setShowingTimeId(showingTimeId === event.id ? null : event.id)}
                         >
-                          {getEventLabel(event)}
+                          {showingTimeId === event.id ? actualTime : label}
                         </div>
                       ))}
                     </div>

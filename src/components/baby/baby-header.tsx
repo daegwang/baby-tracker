@@ -20,7 +20,15 @@ export function BabyHeader({ baby }: BabyHeaderProps) {
     age = language === 'ko' ? `${diffDays}${t('daysOld')}` : `${diffDays} ${t('daysOld')}`;
   } else if (diffDays < 30) {
     const weeks = Math.floor(diffDays / 7);
-    age = language === 'ko' ? `${weeks}${t('weeksOld')}` : `${weeks} ${t('weeksOld')}`;
+    const remainingDays = diffDays % 7;
+    const weekText = weeks === 1 ? t('week') : t('weeks');
+    const dayText = remainingDays === 1 ? t('day') : t('days');
+    
+    if (language === 'ko') {
+      age = remainingDays > 0 ? `${weeks}${weekText} ${remainingDays}${dayText}` : `${weeks}${weekText}`;
+    } else {
+      age = remainingDays > 0 ? `${weeks} ${weekText} ${remainingDays} ${dayText} old` : `${weeks} ${weekText} old`;
+    }
   } else if (diffDays < 365) {
     const months = Math.floor(diffDays / 30);
     age = language === 'ko' ? `${months}${t('monthsOld')}` : `${months} ${t('monthsOld')}`;

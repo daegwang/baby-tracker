@@ -32,7 +32,7 @@ export async function getEvents(
     .from('events')
     .select('*')
     .eq('baby_id', babyId)
-    .order('started_at', { ascending: false });
+    .order('started_at', { ascending: true });
 
   if (date) {
     const startOfDay = new Date(date);
@@ -95,7 +95,7 @@ export async function getEventsForMonth(
     .eq('baby_id', babyId)
     .gte('started_at', startOfMonth.toISOString())
     .lte('started_at', endOfMonth.toISOString())
-    .order('started_at', { ascending: false });
+    .order('started_at', { ascending: true });
 
   if (error) throw error;
   return data || [];
