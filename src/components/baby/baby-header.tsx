@@ -10,7 +10,7 @@ interface BabyHeaderProps {
 export function BabyHeader({ baby }: BabyHeaderProps) {
   const { t, language } = useI18n();
   
-  const birth = new Date(baby.birth_date);
+  const birth = new Date(baby.birth_date + 'T00:00:00');
   const now = new Date();
   const diffMs = now.getTime() - birth.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));

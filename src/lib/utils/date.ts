@@ -1,5 +1,5 @@
 export function calculateAge(birthDate: string): string {
-  const birth = new Date(birthDate);
+  const birth = new Date(birthDate + 'T00:00:00');
   const now = new Date();
   
   const diffMs = now.getTime() - birth.getTime();
