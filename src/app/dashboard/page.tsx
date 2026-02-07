@@ -3,15 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useTheme } from 'next-themes';
-import { addDays, isToday } from 'date-fns';
 import { BabyHeader } from '@/components/baby/baby-header';
 import { TodaySummary } from '@/components/tracking/today-summary';
 import { QuickActions } from '@/components/tracking/quick-actions';
+import { ActiveTimerBanner } from '@/components/tracking/active-timer-banner';
 import { SleepSheet } from '@/components/tracking/sleep-sheet';
 import { FeedSheet } from '@/components/tracking/feed-sheet';
 import { DiaperSheet } from '@/components/tracking/diaper-sheet';
 import { PumpSheet } from '@/components/tracking/pump-sheet';
+import { SettingsSheet } from '@/components/settings-sheet';
 import { Button } from '@/components/ui/button';
 import { getBabies } from '@/lib/api/babies';
 import { getLastEvents } from '@/lib/api/events';
@@ -20,9 +20,7 @@ import type { Baby, BabyEvent, EventType } from '@/lib/types';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { t, language, setLanguage } = useI18n();
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
+  const { t } = useI18n();
   const [baby, setBaby] = useState<Baby | null>(null);
   const [lastEvents, setLastEvents] = useState<Partial<Record<EventType, BabyEvent>>>({});
   const [loading, setLoading] = useState(true);
@@ -33,10 +31,7 @@ export default function DashboardPage() {
   const [feedSheetOpen, setFeedSheetOpen] = useState(false);
   const [diaperSheetOpen, setDiaperSheetOpen] = useState(false);
   const [pumpSheetOpen, setPumpSheetOpen] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const [settingsSheetOpen, setSettingsSheetOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -92,20 +87,12 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setLanguage(language === 'en' ? 'ko' : 'en')}
+              onClick={() => setSettingsSheetOpen(true)}
               className="w-10 h-10 rounded-full flex items-center justify-center bg-muted text-lg"
+              aria-label={t('settings')}
             >
-              {language === 'en' ? '🇺🇸' : '🇰🇷'}
+              ⚙️
             </button>
-            {mounted && (
-              <button
-                type="button"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="w-10 h-10 rounded-full flex items-center justify-center bg-muted text-lg"
-              >
-                {theme === 'dark' ? '🌙' : '☀️'}
-              </button>
-            )}
             <Link href="/dashboard/timeline">
               <Button variant="outline">{t('timeline')}</Button>
             </Link>
@@ -153,6 +140,22 @@ export default function DashboardPage() {
           onOpenChange={setPumpSheetOpen}
           babyId={baby.id}
           onSaved={handleEventSaved}
+        />
+        <SettingsSheet
+          open={settingsSheetOpen}
+          onOpenChange={setSettingsSheetOpen}
+        />
+
+        {/* Floating Timer Banner */}
+        <ActiveTimerBanner 
+          babyId={baby.id} 
+          onTap={(type) => {
+            if (type === 'breast') {
+              setFeedSheetOpen(true);
+            } else if (type === 'pump') {
+              setPumpSheetOpen(true);
+            }
+          }} 
         />
       </div>
     </div>

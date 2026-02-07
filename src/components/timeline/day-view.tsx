@@ -33,6 +33,7 @@ interface CellEvent {
   id: string;
   time: string;
   label: string;
+  actualTime: string;
 }
 
 interface AggregatedCell {
@@ -44,6 +45,7 @@ interface AggregatedCell {
 export function DayView({ selectedDate, onDateChange, events, onEventDeleted }: DayViewProps) {
   const [editMode, setEditMode] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [showingTimeId, setShowingTimeId] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this entry?')) return;
@@ -70,13 +72,14 @@ export function DayView({ selectedDate, onDateChange, events, onEventDeleted }: 
       const eventDate = new Date(event.started_at);
       const hour = getHours(eventDate);
       const time = format(eventDate, 'ha');
+      const actualTime = format(eventDate, 'h:mm a');
       
       const addToCell = (colType: ColumnType, label: string, ml: number = 0, isBreast: boolean = false) => {
         const key = `${hour}-${colType}`;
         if (!map[key]) {
           map[key] = { events: [], totalMl: 0, hasBreast: false };
         }
-        map[key].events.push({ id: event.id, time, label });
+        map[key].events.push({ id: event.id, time, label, actualTime });
         map[key].totalMl += ml;
         if (isBreast) map[key].hasBreast = true;
       };
@@ -305,14 +308,20 @@ export function DayView({ selectedDate, onDateChange, events, onEventDeleted }: 
                     {cell?.events.map((ev) => (
                       <div
                         key={ev.id}
-                        className={`${col.color} text-[10px] px-1.5 py-0.5 rounded font-semibold flex items-center gap-1 overflow-hidden min-w-0 max-w-full`}
-                        title={ev.label}
+                        className={`${col.color} text-[10px] px-1.5 py-0.5 rounded font-semibold flex items-center gap-1 overflow-hidden min-w-0 max-w-full cursor-pointer hover:opacity-90`}
+                        title={showingTimeId === ev.id ? ev.actualTime : ev.label}
+                        onClick={() => setShowingTimeId(showingTimeId === ev.id ? null : ev.id)}
                       >
-                        <span className="overflow-hidden min-w-0 flex-shrink whitespace-pre-line leading-tight text-center">{ev.label}</span>
+                        <span className="overflow-hidden min-w-0 flex-shrink whitespace-pre-line leading-tight text-center">
+                          {showingTimeId === ev.id ? ev.actualTime : ev.label}
+                        </span>
                         {editMode && (
                           <button
                             type="button"
-                            onClick={() => handleDelete(ev.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(ev.id);
+                            }}
                             disabled={deletingId === ev.id}
                             className="opacity-60 hover:opacity-100 active:opacity-100 flex-shrink-0"
                           >

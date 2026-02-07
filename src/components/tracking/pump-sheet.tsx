@@ -12,6 +12,18 @@ import { createEvent } from '@/lib/api/events';
 import { useI18n } from '@/lib/i18n';
 import type { PumpingMetadata } from '@/lib/types';
 
+const PUMP_TIMER_STORAGE_KEY = 'baby-tracker-active-pump-timer';
+
+interface PersistedTimer {
+  type: 'pump';
+  babyId: string;
+  startTime: string; // ISO string
+  elapsedMs: number;
+  lastResumeTime: string | null; // ISO string
+  isRunning: boolean;
+  side: 'left' | 'right' | 'both';
+}
+
 interface PumpSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -70,13 +82,102 @@ export function PumpSheet({ open, onOpenChange, babyId, onSaved }: PumpSheetProp
   const [side, setSide] = useState<'left' | 'right' | 'both'>('both');
   const [isRunning, setIsRunning] = useState(false);
   const [startTime, setStartTime] = useState<Date>();
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [lastResumeTime, setLastResumeTime] = useState<Date | null>(null);
   const [amount, setAmount] = useState(60);
   const [loading, setLoading] = useState(false);
 
-  const handleStart = () => { setStartTime(new Date()); setIsRunning(true); };
-  const handleResume = () => { setIsRunning(true); };
-  const handleStop = () => { setIsRunning(false); };
-  const handleReset = () => { setStartTime(undefined); setIsRunning(false); };
+  // Persist timer state to localStorage
+  const persistTimer = () => {
+    if (startTime) {
+      const timerData: PersistedTimer = {
+        type: 'pump',
+        babyId,
+        startTime: startTime.toISOString(),
+        elapsedMs,
+        lastResumeTime: lastResumeTime?.toISOString() || null,
+        isRunning,
+        side,
+      };
+      localStorage.setItem(PUMP_TIMER_STORAGE_KEY, JSON.stringify(timerData));
+    }
+  };
+
+  // Clear persisted timer
+  const clearPersistedTimer = () => {
+    localStorage.removeItem(PUMP_TIMER_STORAGE_KEY);
+  };
+
+  // Check for persisted timer on sheet open
+  useEffect(() => {
+    if (open) {
+      const saved = localStorage.getItem(PUMP_TIMER_STORAGE_KEY);
+      if (saved) {
+        try {
+          const timer: any = JSON.parse(saved);
+          // Handle both explicit type: 'pump' and missing type (backward compatibility)
+          if (timer.babyId === babyId) {
+            // Restore state directly without confirmation
+            setSide(timer.side);
+            setStartTime(new Date(timer.startTime));
+            
+            // Calculate elapsed time correctly to avoid double-counting
+            if (timer.isRunning && timer.lastResumeTime) {
+              // If timer was running, calculate total elapsed up to now
+              const elapsedSinceResume = Date.now() - new Date(timer.lastResumeTime).getTime();
+              setElapsedMs(timer.elapsedMs + elapsedSinceResume);
+              setLastResumeTime(new Date()); // Set to now for continued tracking
+            } else {
+              // If timer was paused, keep the saved elapsed time
+              setElapsedMs(timer.elapsedMs);
+              setLastResumeTime(timer.lastResumeTime ? new Date(timer.lastResumeTime) : null);
+            }
+            
+            setIsRunning(timer.isRunning);
+          }
+        } catch (error) {
+          console.error('Failed to restore timer:', error);
+          clearPersistedTimer();
+        }
+      }
+    }
+  }, [open, babyId]);
+
+  // Auto-persist timer state when it changes
+  useEffect(() => {
+    if (startTime) {
+      persistTimer();
+    }
+  }, [startTime, elapsedMs, lastResumeTime, isRunning, side, babyId]);
+
+  const handleStart = () => { 
+    const now = new Date();
+    setStartTime(now);
+    setLastResumeTime(now);
+    setElapsedMs(0);
+    setIsRunning(true);
+  };
+  
+  const handleResume = () => { 
+    const now = new Date();
+    setLastResumeTime(now);
+    setIsRunning(true);
+  };
+  
+  const handleStop = () => { 
+    if (lastResumeTime) {
+      setElapsedMs(prev => prev + (Date.now() - lastResumeTime.getTime()));
+    }
+    setIsRunning(false);
+  };
+  
+  const handleReset = () => { 
+    setStartTime(undefined);
+    setLastResumeTime(null);
+    setElapsedMs(0);
+    setIsRunning(false);
+    clearPersistedTimer();
+  };
 
   const handleSave = async () => {
     if (!amount) return;
@@ -84,18 +185,32 @@ export function PumpSheet({ open, onOpenChange, babyId, onSaved }: PumpSheetProp
 
     try {
       const metadata: PumpingMetadata = { side, amount_ml: amount };
+      
+      // Calculate total elapsed time including current running segment
+      let totalMs = elapsedMs;
+      if (isRunning && lastResumeTime) {
+        totalMs += Date.now() - lastResumeTime.getTime();
+      }
+      
+      const started_at = startTime?.toISOString() || new Date().toISOString();
+      const ended_at = startTime ? new Date(startTime.getTime() + totalMs).toISOString() : null;
 
       await createEvent({
         baby_id: babyId,
         user_id: '',
         event_type: 'pumping',
-        started_at: startTime?.toISOString() || new Date().toISOString(),
-        ended_at: startTime && !isRunning ? new Date().toISOString() : null,
+        started_at,
+        ended_at,
         metadata,
       });
 
+      // Clear persisted timer on successful save
+      clearPersistedTimer();
+      
       setIsRunning(false);
       setStartTime(undefined);
+      setElapsedMs(0);
+      setLastResumeTime(null);
       setAmount(60);
       onSaved();
       onOpenChange(false);
@@ -137,6 +252,8 @@ export function PumpSheet({ open, onOpenChange, babyId, onSaved }: PumpSheetProp
           <EventTimer
             isRunning={isRunning}
             startTime={startTime}
+            elapsedMs={elapsedMs}
+            lastResumeTime={lastResumeTime}
             onStart={handleStart}
             onStop={handleStop}
             onResume={handleResume}

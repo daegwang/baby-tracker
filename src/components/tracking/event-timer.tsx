@@ -6,15 +6,16 @@ import { useI18n } from '@/lib/i18n';
 interface EventTimerProps {
   isRunning: boolean;
   startTime?: Date;
+  elapsedMs?: number;
+  lastResumeTime?: Date | null;
   onStart: () => void;
   onStop: () => void;
   onResume?: () => void;
   onReset?: () => void;
 }
 
-function formatElapsed(startTime: Date): string {
-  const diffMs = Date.now() - startTime.getTime();
-  const totalSeconds = Math.floor(diffMs / 1000);
+function formatElapsedMs(totalMs: number): string {
+  const totalSeconds = Math.floor(totalMs / 1000);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
@@ -26,6 +27,8 @@ function formatElapsed(startTime: Date): string {
 export function EventTimer({ 
   isRunning, 
   startTime, 
+  elapsedMs = 0,
+  lastResumeTime,
   onStart, 
   onStop, 
   onResume,
@@ -35,13 +38,26 @@ export function EventTimer({
   const [elapsed, setElapsed] = useState('0:00');
 
   useEffect(() => {
-    if (!startTime) { setElapsed('0:00'); return; }
-    setElapsed(formatElapsed(startTime));
+    if (!startTime) { 
+      setElapsed('0:00'); 
+      return; 
+    }
+    
+    // Calculate total elapsed time
+    const calculateElapsed = () => {
+      let totalMs = elapsedMs;
+      if (isRunning && lastResumeTime) {
+        totalMs += Date.now() - lastResumeTime.getTime();
+      }
+      return formatElapsedMs(totalMs);
+    };
+    
+    setElapsed(calculateElapsed());
     if (!isRunning) return;
 
-    const interval = setInterval(() => setElapsed(formatElapsed(startTime)), 1000);
+    const interval = setInterval(() => setElapsed(calculateElapsed()), 1000);
     return () => clearInterval(interval);
-  }, [isRunning, startTime]);
+  }, [isRunning, startTime, elapsedMs, lastResumeTime]);
 
   return (
     <div className="py-4 px-4 bg-muted/40 rounded-xl flex items-center justify-center gap-3">

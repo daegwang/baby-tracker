@@ -61,6 +61,10 @@ export const translations = {
     goToThisWeek: 'Go to this week',
     
     // Baby Header
+    day: 'day',
+    days: 'days',
+    week: 'week',
+    weeks: 'weeks',
     daysOld: 'days old',
     weeksOld: 'weeks old',
     monthsOld: 'months old',
@@ -157,6 +161,10 @@ export const translations = {
     goToThisWeek: '이번 주로 이동',
     
     // Baby Header
+    day: '일',
+    days: '일',
+    week: '주',
+    weeks: '주',
     daysOld: '일',
     weeksOld: '주',
     monthsOld: '개월',

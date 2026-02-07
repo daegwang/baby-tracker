@@ -9,7 +9,10 @@ export function calculateAge(birthDate: string): string {
     return `${diffDays} day${diffDays === 1 ? '' : 's'} old`;
   } else if (diffDays < 30) {
     const weeks = Math.floor(diffDays / 7);
-    return `${weeks} week${weeks === 1 ? '' : 's'} old`;
+    const remainingDays = diffDays % 7;
+    const weekText = `${weeks} week${weeks === 1 ? '' : 's'}`;
+    const dayText = remainingDays > 0 ? ` ${remainingDays} day${remainingDays === 1 ? '' : 's'}` : '';
+    return `${weekText}${dayText} old`;
   } else if (diffDays < 365) {
     const months = Math.floor(diffDays / 30);
     return `${months} month${months === 1 ? '' : 's'} old`;
