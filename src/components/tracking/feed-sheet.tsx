@@ -52,15 +52,15 @@ function AmountPicker({ value, onChange }: { value: number; onChange: (v: number
   };
 
   return (
-    <div className="relative h-44 overflow-hidden rounded-lg border bg-muted/30">
+    <div className="relative h-36 overflow-hidden rounded-lg border bg-muted/30">
       <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-11 bg-primary/10 border-y border-primary/30 pointer-events-none z-10" />
-      <div className="absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-background to-transparent pointer-events-none z-20" />
-      <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-background to-transparent pointer-events-none z-20" />
+      <div className="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-background to-transparent pointer-events-none z-20" />
+      <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-background to-transparent pointer-events-none z-20" />
       <div
         ref={containerRef}
         onScroll={handleScroll}
         className="h-full overflow-y-auto snap-y snap-mandatory"
-        style={{ paddingTop: '88px', paddingBottom: '88px', scrollbarWidth: 'none' }}
+        style={{ paddingTop: '66px', paddingBottom: '66px', scrollbarWidth: 'none' }}
       >
         {amounts.map((amt) => (
           <div
@@ -80,7 +80,7 @@ function AmountPicker({ value, onChange }: { value: number; onChange: (v: number
 
 export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProps) {
   const { t, language } = useI18n();
-  const [method, setMethod] = useState<'breast' | 'bottle'>('bottle');
+  const [method, setMethod] = useState<'breast' | 'bottle'>('breast');
   const [side, setSide] = useState<'left' | 'right' | 'both'>('left');
   const [entryMode, setEntryMode] = useState<'timer' | 'manual'>('timer');
   const [isRunning, setIsRunning] = useState(false);
@@ -90,7 +90,8 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
   const [manualStartTime, setManualStartTime] = useState('');
   const [manualEndTime, setManualEndTime] = useState('');
   const [amount, setAmount] = useState(90);
-  const [breastAmount, setBreastAmount] = useState<string>('');
+  const [breastAmount, setBreastAmount] = useState(0);
+  const [showBreastAmount, setShowBreastAmount] = useState(false);
   const [feedType, setFeedType] = useState<'breast_milk' | 'formula'>('breast_milk');
   const [loading, setLoading] = useState(false);
 
@@ -207,8 +208,8 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
 
       if (method === 'breast') {
         metadata.side = side;
-        if (breastAmount) {
-          metadata.amount_ml = parseInt(breastAmount) || undefined;
+        if (breastAmount > 0) {
+          metadata.amount_ml = breastAmount;
         }
         
         if (entryMode === 'manual') {
@@ -266,7 +267,7 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
       setElapsedMs(0);
       setLastResumeTime(null);
       setAmount(90);
-      setBreastAmount('');
+      setBreastAmount(0);
       setFeedType('breast_milk');
       setEntryMode('timer');
       onSaved();
@@ -331,19 +332,17 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
 
               {/* Amount (optional) */}
               <div>
-                <label className="block text-sm text-muted-foreground mb-1">
-                  {language === 'ko' ? '양 (선택)' : 'Amount (optional)'}
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    value={breastAmount}
-                    onChange={(e) => setBreastAmount(e.target.value)}
-                    placeholder="0"
-                    className="flex-1 h-12 px-3 rounded-lg border border-border bg-background text-lg text-center"
-                  />
-                  <span className="text-muted-foreground">ml</span>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowBreastAmount(!showBreastAmount)}
+                  className="flex items-center justify-between w-full h-11 px-3 rounded-lg border border-border bg-muted/30 text-sm font-medium mb-2"
+                >
+                  <span>{language === 'ko' ? '양 (선택)' : 'Amount (optional)'}</span>
+                  <span className="text-lg">{showBreastAmount ? '▼' : '▶'}</span>
+                </button>
+                {showBreastAmount && (
+                  <AmountPicker value={breastAmount} onChange={setBreastAmount} />
+                )}
               </div>
 
               {/* Timer / Manual Toggle */}
