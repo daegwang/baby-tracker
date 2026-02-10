@@ -98,6 +98,13 @@ export const translations = {
     
     // Event details
     inProgress: 'In progress',
+    
+    // Time options
+    setSpecificTime: 'Set specific time',
+    setSpecificDateTime: 'Set specific date & time',
+    timeNotSpecified: 'Time not specified',
+    time: 'Time',
+    date: 'Date',
   },
   ko: {
     // Common
@@ -198,6 +205,13 @@ export const translations = {
     
     // Event details
     inProgress: '진행 중',
+    
+    // Time options
+    setSpecificTime: '시간 설정',
+    setSpecificDateTime: '날짜 및 시간 설정',
+    timeNotSpecified: '시간 미지정',
+    time: '시간',
+    date: '날짜',
   },
 } as const;
 

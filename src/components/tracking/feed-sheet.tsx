@@ -8,6 +8,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { ChevronDown } from 'lucide-react';
 import { EventTimer } from './event-timer';
 import { createEvent } from '@/lib/api/events';
 import { useI18n } from '@/lib/i18n';
@@ -94,13 +100,20 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
   const [showBreastAmount, setShowBreastAmount] = useState(false);
   const [feedType, setFeedType] = useState<'breast_milk' | 'formula'>('breast_milk');
   const [loading, setLoading] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedTime, setSelectedTime] = useState('');
 
-  // Reset manual times when sheet opens
+  // Reset date, time, and manual times when sheet opens
   useEffect(() => {
     if (open) {
-      const now = format(new Date(), 'HH:mm');
-      setManualStartTime(now);
-      setManualEndTime(now);
+      const now = new Date();
+      const timeStr = format(now, 'HH:mm');
+      setSelectedDate(format(now, 'yyyy-MM-dd'));
+      setSelectedTime(timeStr);
+      setManualStartTime(timeStr);
+      setManualEndTime(timeStr);
+      setIsExpanded(false);
     }
   }, [open]);
 
@@ -202,7 +215,10 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
   const handleSave = async () => {
     setLoading(true);
     try {
-      const metadata: FeedMetadata = { method };
+      const metadata: FeedMetadata & { time_specified?: boolean } = { 
+        method,
+        time_specified: isExpanded
+      };
       let started_at: string;
       let ended_at: string | null = null;
 
@@ -213,41 +229,78 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
         }
         
         if (entryMode === 'manual') {
-          const today = new Date();
-          const [startH, startM] = manualStartTime.split(':').map(Number);
-          const [endH, endM] = manualEndTime.split(':').map(Number);
-          
-          const startDate = new Date(today);
-          startDate.setHours(startH, startM, 0, 0);
-          
-          const endDate = new Date(today);
-          endDate.setHours(endH, endM, 0, 0);
-          
-          if (endDate < startDate) {
-            endDate.setDate(endDate.getDate() + 1);
+          if (!isExpanded) {
+            // Collapsed: use current timestamp
+            started_at = new Date().toISOString();
+            ended_at = null;
+          } else {
+            // Expanded: use selected date and times
+            const [year, month, day] = selectedDate.split('-').map(Number);
+            const [startH, startM] = manualStartTime.split(':').map(Number);
+            const [endH, endM] = manualEndTime.split(':').map(Number);
+            
+            const startDate = new Date(year, month - 1, day, startH, startM, 0, 0);
+            const endDate = new Date(year, month - 1, day, endH, endM, 0, 0);
+            
+            if (endDate < startDate) {
+              endDate.setDate(endDate.getDate() + 1);
+            }
+            
+            started_at = startDate.toISOString();
+            ended_at = endDate.toISOString();
           }
-          
-          started_at = startDate.toISOString();
-          ended_at = endDate.toISOString();
         } else {
           // Timer mode: calculate ended_at from startTime + elapsedMs
           if (startTime) {
-            started_at = startTime.toISOString();
-            // Calculate total elapsed (include current running segment if still running)
-            let totalMs = elapsedMs;
-            if (isRunning && lastResumeTime) {
-              totalMs += Date.now() - lastResumeTime.getTime();
+            if (!isExpanded) {
+              // Collapsed: use current time as start
+              const timerStart = new Date();
+              let totalMs = elapsedMs;
+              if (isRunning && lastResumeTime) {
+                totalMs += Date.now() - lastResumeTime.getTime();
+              }
+              started_at = timerStart.toISOString();
+              ended_at = new Date(timerStart.getTime() + totalMs).toISOString();
+            } else {
+              // Expanded: use selected date and time as start
+              const [year, month, day] = selectedDate.split('-').map(Number);
+              const [hours, minutes] = selectedTime.split(':').map(Number);
+              const timerStart = new Date(year, month - 1, day, hours, minutes, 0, 0);
+              
+              let totalMs = elapsedMs;
+              if (isRunning && lastResumeTime) {
+                totalMs += Date.now() - lastResumeTime.getTime();
+              }
+              
+              started_at = timerStart.toISOString();
+              ended_at = new Date(timerStart.getTime() + totalMs).toISOString();
             }
-            ended_at = new Date(startTime.getTime() + totalMs).toISOString();
           } else {
-            started_at = new Date().toISOString();
-            ended_at = new Date().toISOString();
+            // No timer used
+            if (!isExpanded) {
+              started_at = new Date().toISOString();
+              ended_at = null;
+            } else {
+              const [year, month, day] = selectedDate.split('-').map(Number);
+              const [hours, minutes] = selectedTime.split(':').map(Number);
+              const timestamp = new Date(year, month - 1, day, hours, minutes, 0, 0);
+              started_at = timestamp.toISOString();
+              ended_at = timestamp.toISOString();
+            }
           }
         }
       } else {
+        // Bottle feeding
         metadata.amount_ml = amount;
         metadata.formula = feedType === 'formula';
-        started_at = new Date().toISOString();
+        if (!isExpanded) {
+          started_at = new Date().toISOString();
+        } else {
+          const [year, month, day] = selectedDate.split('-').map(Number);
+          const [hours, minutes] = selectedTime.split(':').map(Number);
+          const timestamp = new Date(year, month - 1, day, hours, minutes, 0, 0);
+          started_at = timestamp.toISOString();
+        }
       }
 
       await createEvent({
@@ -288,6 +341,45 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
         </SheetHeader>
 
         <div className="space-y-4">
+          {/* Date & Time Collapsible */}
+          <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+            <CollapsibleTrigger asChild>
+              <button 
+                type="button"
+                className="flex items-center justify-between w-full h-12 px-3 rounded-lg border border-border bg-muted/30 text-sm font-medium hover:bg-muted/50 transition-colors"
+              >
+                <span>{t('setSpecificDateTime')}</span>
+                <ChevronDown 
+                  className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                />
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-3 mt-3">
+              <div>
+                <label className="block text-sm text-muted-foreground mb-2">
+                  {t('date')}
+                </label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-full h-12 px-3 rounded-lg border border-border bg-background text-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-muted-foreground mb-2">
+                  {t('time')}
+                </label>
+                <input
+                  type="time"
+                  value={selectedTime}
+                  onChange={(e) => setSelectedTime(e.target.value)}
+                  className="w-full h-12 px-3 rounded-lg border border-border bg-background text-lg"
+                />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
           {/* Method Toggle */}
           <div className="grid grid-cols-2 h-11 p-1 bg-muted rounded-lg">
             <button
@@ -368,41 +460,45 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
               </div>
 
               {entryMode === 'timer' ? (
-                <EventTimer
-                  isRunning={isRunning}
-                  startTime={startTime}
-                  elapsedMs={elapsedMs}
-                  lastResumeTime={lastResumeTime}
-                  onStart={handleStart}
-                  onStop={handleStop}
-                  onResume={handleResume}
-                  onReset={handleReset}
-                />
+                <>
+                  <EventTimer
+                    isRunning={isRunning}
+                    startTime={startTime}
+                    elapsedMs={elapsedMs}
+                    lastResumeTime={lastResumeTime}
+                    onStart={handleStart}
+                    onStop={handleStop}
+                    onResume={handleResume}
+                    onReset={handleReset}
+                  />
+                </>
               ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm text-muted-foreground mb-1">
-                      {language === 'ko' ? '시작' : 'Start'}
-                    </label>
-                    <input
-                      type="time"
-                      value={manualStartTime}
-                      onChange={(e) => setManualStartTime(e.target.value)}
-                      className="w-full h-12 px-3 rounded-lg border border-border bg-background text-lg"
-                    />
+                isExpanded && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm text-muted-foreground mb-1">
+                        {language === 'ko' ? '시작' : 'Start'}
+                      </label>
+                      <input
+                        type="time"
+                        value={manualStartTime}
+                        onChange={(e) => setManualStartTime(e.target.value)}
+                        className="w-full h-12 px-3 rounded-lg border border-border bg-background text-lg"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-muted-foreground mb-1">
+                        {language === 'ko' ? '종료' : 'End'}
+                      </label>
+                      <input
+                        type="time"
+                        value={manualEndTime}
+                        onChange={(e) => setManualEndTime(e.target.value)}
+                        className="w-full h-12 px-3 rounded-lg border border-border bg-background text-lg"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm text-muted-foreground mb-1">
-                      {language === 'ko' ? '종료' : 'End'}
-                    </label>
-                    <input
-                      type="time"
-                      value={manualEndTime}
-                      onChange={(e) => setManualEndTime(e.target.value)}
-                      className="w-full h-12 px-3 rounded-lg border border-border bg-background text-lg"
-                    />
-                  </div>
-                </div>
+                )
               )}
             </>
           ) : (
@@ -428,6 +524,7 @@ export function FeedSheet({ open, onOpenChange, babyId, onSaved }: FeedSheetProp
                   {t('formula')}
                 </button>
               </div>
+              
               <AmountPicker value={amount} onChange={setAmount} />
             </>
           )}

@@ -3,6 +3,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatTime, formatDuration } from '@/lib/utils/date';
+import { useI18n } from '@/lib/i18n';
 import type { BabyEvent } from '@/lib/types';
 
 interface EventItemProps {
@@ -45,6 +46,7 @@ function getEventDetail(event: BabyEvent): string {
 
 export function EventItem({ event, onDelete }: EventItemProps) {
   const config = eventConfig[event.event_type];
+  const { t } = useI18n();
 
   return (
     <Card className={config.bgColor}>
@@ -57,7 +59,7 @@ export function EventItem({ event, onDelete }: EventItemProps) {
                 {config.label}
               </span>
               <span className="text-sm text-muted-foreground">
-                {formatTime(event.started_at)}
+                {event.metadata?.time_specified !== false ? formatTime(event.started_at) : t('today')}
               </span>
             </div>
             <div className="text-sm mt-1">{getEventDetail(event)}</div>

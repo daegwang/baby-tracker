@@ -114,7 +114,10 @@ export function SleepSheet({ open, onOpenChange, babyId, onSaved }: SleepSheetPr
       const end = new Date(endDate);
       end.setHours(endH, endM, 0, 0);
 
-      const metadata: SleepMetadata = { type: sleepType };
+      const metadata: SleepMetadata & { time_specified?: boolean } = { 
+        type: sleepType,
+        time_specified: true // Sleep always has specific time
+      };
 
       await createEvent({
         baby_id: babyId,

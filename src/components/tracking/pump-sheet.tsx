@@ -1,12 +1,19 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { format } from 'date-fns';
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { ChevronDown } from 'lucide-react';
 import { EventTimer } from './event-timer';
 import { createEvent } from '@/lib/api/events';
 import { useI18n } from '@/lib/i18n';
@@ -86,6 +93,19 @@ export function PumpSheet({ open, onOpenChange, babyId, onSaved }: PumpSheetProp
   const [lastResumeTime, setLastResumeTime] = useState<Date | null>(null);
   const [amount, setAmount] = useState(60);
   const [loading, setLoading] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedTime, setSelectedTime] = useState('');
+
+  // Reset date and time to current when sheet opens
+  useEffect(() => {
+    if (open) {
+      const now = new Date();
+      setSelectedDate(format(now, 'yyyy-MM-dd'));
+      setSelectedTime(format(now, 'HH:mm'));
+      setIsExpanded(false);
+    }
+  }, [open]);
 
   // Persist timer state to localStorage
   const persistTimer = () => {
@@ -184,16 +204,47 @@ export function PumpSheet({ open, onOpenChange, babyId, onSaved }: PumpSheetProp
     setLoading(true);
 
     try {
-      const metadata: PumpingMetadata = { side, amount_ml: amount };
+      const metadata: PumpingMetadata & { time_specified?: boolean } = { 
+        side, 
+        amount_ml: amount,
+        time_specified: isExpanded
+      };
       
-      // Calculate total elapsed time including current running segment
-      let totalMs = elapsedMs;
-      if (isRunning && lastResumeTime) {
-        totalMs += Date.now() - lastResumeTime.getTime();
+      let started_at: string;
+      let ended_at: string | null = null;
+      
+      if (!isExpanded) {
+        // Collapsed: use current timestamp
+        const timestamp = new Date();
+        if (startTime) {
+          // If timer was used, calculate elapsed
+          let totalMs = elapsedMs;
+          if (isRunning && lastResumeTime) {
+            totalMs += Date.now() - lastResumeTime.getTime();
+          }
+          started_at = timestamp.toISOString();
+          ended_at = new Date(timestamp.getTime() + totalMs).toISOString();
+        } else {
+          started_at = timestamp.toISOString();
+        }
+      } else {
+        // Expanded: use selected date and time
+        const [year, month, day] = selectedDate.split('-').map(Number);
+        const [hours, minutes] = selectedTime.split(':').map(Number);
+        const timerStart = new Date(year, month - 1, day, hours, minutes, 0, 0);
+        
+        if (startTime) {
+          // If timer was used, calculate elapsed
+          let totalMs = elapsedMs;
+          if (isRunning && lastResumeTime) {
+            totalMs += Date.now() - lastResumeTime.getTime();
+          }
+          started_at = timerStart.toISOString();
+          ended_at = new Date(timerStart.getTime() + totalMs).toISOString();
+        } else {
+          started_at = timerStart.toISOString();
+        }
       }
-      
-      const started_at = startTime?.toISOString() || new Date().toISOString();
-      const ended_at = startTime ? new Date(startTime.getTime() + totalMs).toISOString() : null;
 
       await createEvent({
         baby_id: babyId,
@@ -230,6 +281,45 @@ export function PumpSheet({ open, onOpenChange, babyId, onSaved }: PumpSheetProp
         </SheetHeader>
 
         <div className="space-y-4">
+          {/* Date & Time Collapsible */}
+          <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+            <CollapsibleTrigger asChild>
+              <button 
+                type="button"
+                className="flex items-center justify-between w-full h-12 px-3 rounded-lg border border-border bg-muted/30 text-sm font-medium hover:bg-muted/50 transition-colors"
+              >
+                <span>{t('setSpecificDateTime')}</span>
+                <ChevronDown 
+                  className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                />
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-3 mt-3">
+              <div>
+                <label className="block text-sm text-muted-foreground mb-2">
+                  {t('date')}
+                </label>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-full h-12 px-3 rounded-lg border border-border bg-background text-lg"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-muted-foreground mb-2">
+                  {t('time')}
+                </label>
+                <input
+                  type="time"
+                  value={selectedTime}
+                  onChange={(e) => setSelectedTime(e.target.value)}
+                  className="w-full h-12 px-3 rounded-lg border border-border bg-background text-lg"
+                />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+
           {/* Side */}
           <div className="grid grid-cols-3 gap-2">
             {(['left', 'right', 'both'] as const).map((s) => (
