@@ -39,22 +39,23 @@ export function SleepSheet({ open, onOpenChange, babyId, onSaved }: SleepSheetPr
     }
   }, [open]);
 
+  // Parse date string + time string into a local Date
+  const parseLocalDateTime = (dateStr: string, timeStr: string) => {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return new Date(year, month - 1, day, hours, minutes, 0, 0);
+  };
+
   // Calculate duration in minutes
   const getDuration = () => {
     if (!startDate || !startTime || !endDate || !endTime) return null;
-    
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
-    
-    const start = new Date(startDate);
-    start.setHours(startH, startM, 0, 0);
-    
-    const end = new Date(endDate);
-    end.setHours(endH, endM, 0, 0);
+
+    const start = parseLocalDateTime(startDate, startTime);
+    const end = parseLocalDateTime(endDate, endTime);
 
     const diffMs = end.getTime() - start.getTime();
     const diffMinutes = Math.round(diffMs / 60000);
-    
+
     return diffMinutes;
   };
 
@@ -77,19 +78,13 @@ export function SleepSheet({ open, onOpenChange, babyId, onSaved }: SleepSheetPr
   // Calculate preview of date range
   const getPreviewText = () => {
     if (!startDate || !startTime || !endDate || !endTime) return null;
-    
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
-    
-    const start = new Date(startDate);
-    start.setHours(startH, startM, 0, 0);
-    
-    const end = new Date(endDate);
-    end.setHours(endH, endM, 0, 0);
+
+    const start = parseLocalDateTime(startDate, startTime);
+    const end = parseLocalDateTime(endDate, endTime);
 
     const startFormatted = format(start, 'M/d h:mm a');
     const endFormatted = format(end, 'M/d h:mm a');
-    
+
     return `${startFormatted} - ${endFormatted}`;
   };
 
@@ -105,14 +100,8 @@ export function SleepSheet({ open, onOpenChange, babyId, onSaved }: SleepSheetPr
     setLoading(true);
 
     try {
-      const [startH, startM] = startTime.split(':').map(Number);
-      const [endH, endM] = endTime.split(':').map(Number);
-      
-      const start = new Date(startDate);
-      start.setHours(startH, startM, 0, 0);
-      
-      const end = new Date(endDate);
-      end.setHours(endH, endM, 0, 0);
+      const start = parseLocalDateTime(startDate, startTime);
+      const end = parseLocalDateTime(endDate, endTime);
 
       const metadata: SleepMetadata & { time_specified?: boolean } = { 
         type: sleepType,
